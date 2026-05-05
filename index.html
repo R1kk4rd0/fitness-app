@@ -776,6 +776,7 @@ function renderDays(){
           <label>× rip</label>
           <input class="win" type="number" id="wrp-${ek}" placeholder="${lastW?lastW.r:'—'}" step="1">
           <button class="wsave" onclick="logW('${ek}','${ex.n}')">Salva</button>
+          ${wArr.length?`<button class="ghost" style="padding:4px 10px;font-size:11px;color:var(--crl);" onclick="undoLastW('${ex.n}')">✕ ultimo</button>`:''}
         </div>
         ${hist?`<div class="whist">${hist}</div>`:''}
       </li>`;
@@ -841,6 +842,15 @@ async function logW(ek,exName){
   if(S.selEx===exName)renderExH(exName);
 }
 
+async function undoLastW(exName){
+  if(!S.weights[exName]||!S.weights[exName].length) return;
+  S.weights[exName].pop();
+  await save(SK.WG,S.weights);
+  toast('Ultima voce eliminata');
+  renderDays();
+  if(S.selEx===exName) renderExH(exName);
+}
+
 function renderExChips(){
   const el=document.getElementById('exchips');
   el.innerHTML='';
@@ -862,10 +872,26 @@ function renderExChips(){
 function renderExH(name){
   const el=document.getElementById('exhist');
   const data=S.weights[name]||[];
-  if(!data.length){el.innerHTML='';return;}
+  if(!data.length){
+    el.innerHTML='<p style="color:var(--tx3);font-size:13px;padding:20px 0;">Nessuna sessione registrata.</p>';
+    return;
+  }
   const maxKg=Math.max(...data.map(e=>e.kg));
   const lastKg=data[data.length-1].kg;
   const diff=lastKg-data[0].kg;
+  // Build editable rows (newest first)
+  const rows=[...data].reverse().map((e,ri)=>{
+    const realIdx=data.length-1-ri;
+    return `<div class="hrow" id="exrow-${realIdx}">
+      <span class="hdate">${e.d}</span>
+      <span class="hvals" id="exval-${realIdx}">${e.kg}kg × ${e.r} rip</span>
+      <div style="display:flex;gap:6px;margin-left:8px;">
+        <button class="ghost" style="padding:3px 10px;font-size:11px;" onclick="editExRow('${name}',${realIdx})">✏️</button>
+        <button class="ghost" style="padding:3px 10px;font-size:11px;color:var(--crl);" onclick="delExRow('${name}',${realIdx})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+
   el.innerHTML=`
     <div class="exhgrid">
       <div class="exhcard"><div class="exhlbl">Massimo</div><div class="exhval">${maxKg}<span style="font-size:12px;color:var(--tx2)">kg</span></div></div>
@@ -874,8 +900,44 @@ function renderExH(name){
     </div>
     <div class="isec">
       <div class="istitle">${name}</div>
-      ${[...data].reverse().map(e=>`<div class="hrow"><span class="hdate">${e.d}</span><span class="hvals">${e.kg}kg × ${e.r} rip</span></div>`).join('')}
+      ${rows}
     </div>`;
+}
+
+function editExRow(name, idx){
+  const entry = S.weights[name][idx];
+  const row = document.getElementById('exrow-'+idx);
+  row.innerHTML = `
+    <span class="hdate">${entry.d}</span>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <input class="win" type="number" id="edit-kg-${idx}" value="${entry.kg}" step="0.5" style="width:58px;">
+      <span style="font-size:12px;color:var(--tx2)">kg ×</span>
+      <input class="win" type="number" id="edit-rp-${idx}" value="${entry.r}" step="1" style="width:48px;">
+      <span style="font-size:12px;color:var(--tx2)">rip</span>
+      <button class="wsave" onclick="saveExRow('${name}',${idx})">OK</button>
+      <button class="ghost" style="padding:4px 10px;font-size:12px;" onclick="renderExH('${name}')">✕</button>
+    </div>`;
+}
+
+async function saveExRow(name, idx){
+  const kg = parseFloat(document.getElementById('edit-kg-'+idx).value);
+  const rp = parseInt(document.getElementById('edit-rp-'+idx).value);
+  if(isNaN(kg)||isNaN(rp)){toast('Valori non validi');return;}
+  S.weights[name][idx].kg = kg;
+  S.weights[name][idx].r = rp;
+  await save(SK.WG, S.weights);
+  toast('Modificato');
+  renderExH(name);
+  renderDays();
+}
+
+async function delExRow(name, idx){
+  S.weights[name].splice(idx,1);
+  await save(SK.WG, S.weights);
+  toast('Voce eliminata');
+  if(S.weights[name].length===0){ S.selEx=null; renderExChips(); }
+  else renderExH(name);
+  renderDays();
 }
 
 function renderStats(){
@@ -907,14 +969,26 @@ function renderStats(){
 function renderHist(){
   const el=document.getElementById('hlist');
   if(!S.misure.length){el.innerHTML='<p style="font-size:13px;color:var(--tx3)">Nessuna misurazione ancora.</p>';return;}
-  el.innerHTML=S.misure.map(m=>{
+  el.innerHTML=S.misure.map((m,i)=>{
     const p=[];
     if(m.p)p.push(parseFloat(m.p).toFixed(1)+'kg');
     if(m.g)p.push(parseFloat(m.g).toFixed(1)+'%');
     if(m.m)p.push('M '+parseFloat(m.m).toFixed(1)+'kg');
     if(m.v)p.push('vita '+m.v+'cm');
-    return `<div class="hrow"><span class="hdate">${m.date}</span><span class="hvals">${p.join(' · ')}</span></div>`;
+    return `<div class="hrow">
+      <span class="hdate">${m.date}</span>
+      <span class="hvals">${p.join(' · ')}</span>
+      <button class="ghost" style="padding:3px 8px;font-size:11px;color:var(--crl);margin-left:8px;" onclick="delMisura(${i})">✕</button>
+    </div>`;
   }).join('');
+}
+
+async function delMisura(i){
+  S.misure.splice(i,1);
+  await save(SK.MI,S.misure);
+  renderStats();
+  renderHist();
+  toast('Misurazione eliminata');
 }
 
 async function saveMisura(){
