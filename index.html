@@ -217,9 +217,50 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--tx);font-
 /* TOAST */
 #toast{position:fixed;bottom:calc(var(--nav) + 14px);left:50%;transform:translateX(-50%);background:var(--tx);color:#fff;font-size:13px;padding:8px 18px;border-radius:20px;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;z-index:300;}
 #toast.on{opacity:1;}
+
+/* PIN */
+#pin-screen{position:fixed;inset:0;background:var(--acc2);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:998;gap:0;}
+#pin-screen.hide{display:none;}
+.pin-logo{font-family:'Syne',sans-serif;font-size:28px;font-weight:700;color:#fff;margin-bottom:6px;}
+.pin-sub{font-size:13px;color:rgba(255,255,255,.6);margin-bottom:40px;}
+.pin-dots{display:flex;gap:14px;margin-bottom:40px;}
+.pin-dot{width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.3);transition:background .15s;}
+.pin-dot.filled{background:#fff;}
+.pin-pad{display:grid;grid-template-columns:repeat(3,72px);grid-template-rows:repeat(4,72px);gap:12px;}
+.pin-btn{width:72px;height:72px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-family:'Syne',sans-serif;font-size:22px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .1s;}
+.pin-btn:active{background:rgba(255,255,255,.35);}
+.pin-btn.empty{background:transparent;pointer-events:none;}
+.pin-error{font-size:13px;color:rgba(255,255,255,0);margin-top:20px;transition:color .2s;}
+.pin-error.show{color:#FFB3A7;}
 </style>
 </head>
 <body>
+
+<!-- PIN SCREEN -->
+<div id="pin-screen">
+  <div class="pin-logo">Fitness App</div>
+  <div class="pin-sub">Inserisci il PIN per accedere</div>
+  <div class="pin-dots">
+    <div class="pin-dot" id="pd0"></div>
+    <div class="pin-dot" id="pd1"></div>
+    <div class="pin-dot" id="pd2"></div>
+  </div>
+  <div class="pin-pad">
+    <button class="pin-btn" onclick="pinPress('1')">1</button>
+    <button class="pin-btn" onclick="pinPress('2')">2</button>
+    <button class="pin-btn" onclick="pinPress('3')">3</button>
+    <button class="pin-btn" onclick="pinPress('4')">4</button>
+    <button class="pin-btn" onclick="pinPress('5')">5</button>
+    <button class="pin-btn" onclick="pinPress('6')">6</button>
+    <button class="pin-btn" onclick="pinPress('7')">7</button>
+    <button class="pin-btn" onclick="pinPress('8')">8</button>
+    <button class="pin-btn" onclick="pinPress('9')">9</button>
+    <button class="pin-btn empty"></button>
+    <button class="pin-btn" onclick="pinPress('0')">0</button>
+    <button class="pin-btn" onclick="pinDel()">⌫</button>
+  </div>
+  <div class="pin-error" id="pin-error">PIN errato, riprova</div>
+</div>
 
 <div id="ld"><div class="spin"></div><div class="ldtx">Caricamento...</div></div>
 
@@ -1172,6 +1213,53 @@ function renderFoodsTable(el){
 function setMacroDay(d){ macroDay=d; renderMacro(); }
 
 // ---- END MACRO ----
+
+// ---- PIN ----
+const CORRECT_PIN = '789';
+let pinEntry = '';
+
+function pinPress(d){
+  if(pinEntry.length >= 3) return;
+  pinEntry += d;
+  updatePinDots();
+  if(pinEntry.length === 3) setTimeout(checkPin, 120);
+}
+
+function pinDel(){
+  pinEntry = pinEntry.slice(0,-1);
+  updatePinDots();
+}
+
+function updatePinDots(){
+  for(let i=0;i<3;i++){
+    document.getElementById('pd'+i).classList.toggle('filled', i < pinEntry.length);
+  }
+}
+
+function checkPin(){
+  if(pinEntry === CORRECT_PIN){
+    document.getElementById('pin-screen').classList.add('hide');
+    sessionStorage.setItem('pin_ok','1');
+  } else {
+    const err = document.getElementById('pin-error');
+    err.classList.add('show');
+    // Shake dots
+    const dots = document.querySelectorAll('.pin-dot');
+    dots.forEach(d=>{ d.style.background='#FFB3A7'; });
+    setTimeout(()=>{
+      pinEntry='';
+      updatePinDots();
+      dots.forEach(d=>{ d.style.background=''; });
+      setTimeout(()=>err.classList.remove('show'), 400);
+    }, 600);
+  }
+}
+
+// Se già autenticato in questa sessione salta il PIN
+if(sessionStorage.getItem('pin_ok')==='1'){
+  document.getElementById('pin-screen').classList.add('hide');
+}
+// ---- END PIN ----
 
 load();
 </script>
